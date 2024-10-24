@@ -7,6 +7,7 @@
 // @match        *://*/*
 // @grant        none
 // @run-at       document-start
+// @icon         https://img.icons8.com/fluency/48/000000/shield.png
 // ==/UserScript==
 
 (function() {
