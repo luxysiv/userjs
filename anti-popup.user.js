@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Smart Block Irregular URLs and Remove Leave Confirmations with Auto-Whitelist for Non-Ad Sites
+// @name         Smart Block Irregular URLs and Remove Leave Confirmations with Auto-Blacklist for Ad Sites
 // @namespace    luxysiv
-// @version      4.6
-// @description  Block irregular URLs, auto-whitelist non-ad sites, and remove leave confirmations.
+// @version      4.7
+// @description  Block irregular URLs, auto-blacklist ad sites, and remove leave confirmations.
 // @author       Mạnh Dương
 // @match        *://*/*
 // @grant        none
@@ -13,8 +13,13 @@
 (function() {
     'use strict';
 
-    // Danh sách các trang đã được white-list
-    let whiteListedSites = new Set();
+    // Lấy danh sách các trang đã được black-list từ localStorage hoặc khởi tạo danh sách mới
+    let blackListedSites = JSON.parse(localStorage.getItem('blackListedSites')) || [];
+
+    // Lưu danh sách vào localStorage
+    function saveBlackList() {
+        localStorage.setItem('blackListedSites', JSON.stringify(blackListedSites));
+    }
 
     // Danh sách các mẫu URL quảng cáo sử dụng regex
     const suspiciousPatterns = [
@@ -30,32 +35,33 @@
         return suspiciousPatterns.some(pattern => pattern.test(url));
     }
 
-    // Kiểm tra xem trang hiện tại đã được white-list chưa
-    function isWhiteListed() {
-        return whiteListedSites.has(window.location.hostname);
+    // Kiểm tra xem trang hiện tại đã bị black-list chưa
+    function isBlackListed() {
+        return blackListedSites.includes(window.location.hostname);
     }
 
-    // Thêm trang vào danh sách white-list
-    function addToWhiteList() {
-        whiteListedSites.add(window.location.hostname);
-        console.log(`Added to whitelist: ${window.location.hostname}`);
+    // Thêm trang vào danh sách black-list
+    function addToBlackList() {
+        if (!blackListedSites.includes(window.location.hostname)) {
+            blackListedSites.push(window.location.hostname);
+            console.log(`Added to blacklist: ${window.location.hostname}`);
+            saveBlackList(); // Lưu lại danh sách sau khi thêm mới
+        }
     }
 
     // Theo dõi các trang mở tab để hiện quảng cáo
     let adTabOpened = false;
     window.addEventListener('focus', function() {
         if (adTabOpened) {
-            console.log('Detected and skipped a tab that opened ads.');
+            addToBlackList(); // Trang mở tab quảng cáo, thêm vào black-list
             adTabOpened = false;
-        } else if (!isWhiteListed()) {
-            addToWhiteList(); // Trang không mở quảng cáo, thêm vào white-list
         }
     });
 
     // Ghi đè window.open để phát hiện và chặn các URL quảng cáo
     const originalWindowOpen = window.open;
     window.open = function(url, target) {
-        if (!isWhiteListed() && isSuspiciousUrl(url)) {
+        if (isSuspiciousUrl(url)) {
             console.log(`Blocked window.open for suspicious URL: ${url}`);
             return null;
         }
@@ -69,7 +75,7 @@
         if (type === 'click') {
             const wrappedListener = function(event) {
                 const target = event.target.closest('a[target="_blank"]');
-                if (target && !isWhiteListed() && isSuspiciousUrl(target.href)) {
+                if (target && isSuspiciousUrl(target.href)) {
                     console.log(`Blocked link click: ${target.href}`);
                     event.preventDefault();
                 } else {
@@ -84,7 +90,7 @@
     // Chặn yêu cầu mạng với XMLHttpRequest
     const originalXhrOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(method, url) {
-        if (!isWhiteListed() && isSuspiciousUrl(url)) {
+        if (isBlackListed() || isSuspiciousUrl(url)) {
             console.log(`Blocked XMLHttpRequest to: ${url}`);
             return;
         }
@@ -95,7 +101,7 @@
     const originalFetch = window.fetch;
     window.fetch = function(input, init) {
         const url = typeof input === 'string' ? input : input.url;
-        if (!isWhiteListed() && isSuspiciousUrl(url)) {
+        if (isBlackListed() || isSuspiciousUrl(url)) {
             console.log(`Blocked fetch request to: ${url}`);
             return Promise.reject(new Error('Blocked suspicious URL'));
         }
@@ -105,7 +111,7 @@
     // Chặn mọi thay đổi location.href hoặc location.assign
     const originalLocationAssign = Location.prototype.assign;
     Location.prototype.assign = function(url) {
-        if (!isWhiteListed() && isSuspiciousUrl(url)) {
+        if (isBlackListed() || isSuspiciousUrl(url)) {
             console.log(`Blocked location.assign to: ${url}`);
             return;
         }
@@ -115,7 +121,7 @@
     // Chặn mọi thay đổi location.replace
     const originalLocationReplace = Location.prototype.replace;
     Location.prototype.replace = function(url) {
-        if (!isWhiteListed() && isSuspiciousUrl(url)) {
+        if (isBlackListed() || isSuspiciousUrl(url)) {
             console.log(`Blocked location.replace to: ${url}`);
             return;
         }
@@ -125,7 +131,7 @@
     // Chặn mọi thay đổi location.href
     Object.defineProperty(Location.prototype, 'href', {
         set: function(url) {
-            if (!isWhiteListed() && isSuspiciousUrl(url)) {
+            if (isBlackListed() || isSuspiciousUrl(url)) {
                 console.log(`Blocked setting location.href to: ${url}`);
                 return;
             }
