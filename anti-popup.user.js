@@ -4,7 +4,7 @@
 // @version      4.4
 // @description  Block irregular URLs and remove leave confirmations.
 // @author       Mạnh Dương
-// @match        *://*/*
+// @match        https://game4u.mobi/*
 // @grant        none
 // @run-at       document-start
 // @icon         https://img.icons8.com/fluency/48/000000/shield.png
