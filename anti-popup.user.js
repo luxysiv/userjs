@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Smart Block Irregular URLs and Remove Leave Confirmations with Auto-Blacklist for Ad Sites
 // @namespace    luxysiv
-// @version      4.7
+// @version      4.8
 // @description  Block irregular URLs, auto-blacklist ad sites, and remove leave confirmations.
 // @author       Mạnh Dương
 // @match        *://*/*
@@ -65,79 +65,84 @@
             console.log(`Blocked window.open for suspicious URL: ${url}`);
             return null;
         }
-        adTabOpened = true;
+        adTabOpened = true; // Đánh dấu rằng đã mở tab quảng cáo
         return originalWindowOpen(url, target);
     };
 
-    // Ghi đè addEventListener để chặn click trên các link mở tab mới
-    const originalAddEventListener = EventTarget.prototype.addEventListener;
-    EventTarget.prototype.addEventListener = function(type, listener, options) {
-        if (type === 'click') {
-            const wrappedListener = function(event) {
-                const target = event.target.closest('a[target="_blank"]');
-                if (target && isSuspiciousUrl(target.href)) {
-                    console.log(`Blocked link click: ${target.href}`);
-                    event.preventDefault();
-                } else {
-                    listener.call(this, event);
-                }
-            };
-            return originalAddEventListener.call(this, type, wrappedListener, options);
-        }
-        return originalAddEventListener.call(this, type, listener, options);
-    };
+    // Chặn các hành động chỉ trên những trang đã có trong danh sách đen
+    if (isBlackListed()) {
+        // Ghi đè addEventListener để chặn click trên các link mở tab mới
+        const originalAddEventListener = EventTarget.prototype.addEventListener;
+        EventTarget.prototype.addEventListener = function(type, listener, options) {
+            if (type === 'click') {
+                const wrappedListener = function(event) {
+                    const target = event.target.closest('a[target="_blank"]');
+                    if (target && isSuspiciousUrl(target.href)) {
+                        console.log(`Blocked link click: ${target.href}`);
+                        event.preventDefault();
+                    } else {
+                        listener.call(this, event);
+                    }
+                };
+                return originalAddEventListener.call(this, type, wrappedListener, options);
+            }
+            return originalAddEventListener.call(this, type, listener, options);
+        };
 
-    // Chặn yêu cầu mạng với XMLHttpRequest
-    const originalXhrOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url) {
-        if (isBlackListed() || isSuspiciousUrl(url)) {
-            console.log(`Blocked XMLHttpRequest to: ${url}`);
-            return;
-        }
-        return originalXhrOpen.apply(this, arguments);
-    };
-
-    // Chặn các yêu cầu mạng với fetch
-    const originalFetch = window.fetch;
-    window.fetch = function(input, init) {
-        const url = typeof input === 'string' ? input : input.url;
-        if (isBlackListed() || isSuspiciousUrl(url)) {
-            console.log(`Blocked fetch request to: ${url}`);
-            return Promise.reject(new Error('Blocked suspicious URL'));
-        }
-        return originalFetch.apply(this, arguments);
-    };
-
-    // Chặn mọi thay đổi location.href hoặc location.assign
-    const originalLocationAssign = Location.prototype.assign;
-    Location.prototype.assign = function(url) {
-        if (isBlackListed() || isSuspiciousUrl(url)) {
-            console.log(`Blocked location.assign to: ${url}`);
-            return;
-        }
-        return originalLocationAssign.call(this, url);
-    };
-
-    // Chặn mọi thay đổi location.replace
-    const originalLocationReplace = Location.prototype.replace;
-    Location.prototype.replace = function(url) {
-        if (isBlackListed() || isSuspiciousUrl(url)) {
-            console.log(`Blocked location.replace to: ${url}`);
-            return;
-        }
-        return originalLocationReplace.call(this, url);
-    };
-
-    // Chặn mọi thay đổi location.href
-    Object.defineProperty(Location.prototype, 'href', {
-        set: function(url) {
-            if (isBlackListed() || isSuspiciousUrl(url)) {
-                console.log(`Blocked setting location.href to: ${url}`);
+        // Chặn yêu cầu mạng với XMLHttpRequest
+        const originalXhrOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url) {
+            if (isSuspiciousUrl(url)) {
+                console.log(`Blocked XMLHttpRequest to: ${url}`);
                 return;
             }
-            return Object.getOwnPropertyDescriptor(Location.prototype, 'href').set.call(this, url);
-        }
-    });
+            return originalXhrOpen.apply(this, arguments);
+        };
+
+        // Chặn các yêu cầu mạng với fetch
+        const originalFetch = window.fetch;
+        window.fetch = function(input, init) {
+            const url = typeof input === 'string' ? input : input.url;
+            if (isSuspiciousUrl(url)) {
+                console.log(`Blocked fetch request to: ${url}`);
+                return Promise.reject(new Error('Blocked suspicious URL'));
+            }
+            return originalFetch.apply(this, arguments);
+        };
+
+        // Chặn mọi thay đổi location.href hoặc location.assign
+        const originalLocationAssign = Location.prototype.assign;
+        Location.prototype.assign = function(url) {
+            if (isSuspiciousUrl(url)) {
+                console.log(`Blocked location.assign to: ${url}`);
+                return;
+            }
+            return originalLocationAssign.call(this, url);
+        };
+
+        // Chặn mọi thay đổi location.replace
+        const originalLocationReplace = Location.prototype.replace;
+        Location.prototype.replace = function(url) {
+            if (isSuspiciousUrl(url)) {
+                console.log(`Blocked location.replace to: ${url}`);
+                return;
+            }
+            return originalLocationReplace.call(this, url);
+        };
+
+        // Chặn mọi thay đổi location.href
+        Object.defineProperty(Location.prototype, 'href', {
+            set: function(url) {
+                if (isSuspiciousUrl(url)) {
+                    console.log(`Blocked setting location.href to: ${url}`);
+                    return;
+                }
+                return Object.getOwnPropertyDescriptor(Location.prototype, 'href').set.call(this, url);
+            }
+        });
+
+        console.log("This site is blacklisted. Blocking suspicious behavior.");
+    }
 
     // Gỡ bỏ hoàn toàn hộp thoại xác nhận rời khỏi trang
     window.onbeforeunload = null;
