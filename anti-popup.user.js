@@ -1,10 +1,12 @@
 // ==UserScript==
-// @match        *://game4u.*/*
 // @name         Smart Block Irregular URLs and Remove Leave Confirmations
 // @namespace    luxysiv
 // @version      4.4
 // @description  Block irregular URLs and remove leave confirmations.
 // @author       Mạnh Dương
+// @match        https://game4u.*/*
+// @match        https://vlxx.*/*
+// @match        https://sextop1.*/*
 // @grant        none
 // @run-at       document-start
 // @icon         https://img.icons8.com/fluency/48/000000/shield.png
