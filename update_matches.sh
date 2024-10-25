@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Đường dẫn tới file UserScript
-USERSCRIPT_FILE="userscript.user.js"
+USERSCRIPT_FILE="anti-popup.user.js"
 
 # Đường dẫn tới file chứa danh sách tên miền (blacklist)
 BLACKLIST_FILE="black.txt"
