@@ -1,5 +1,4 @@
 // ==UserScript==
-// @match        *://game4u.*/*
 
 // @name         Smart Block Irregular URLs and Remove Leave Confirmations
 // @namespace    luxysiv
