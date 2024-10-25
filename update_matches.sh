@@ -15,8 +15,9 @@ sed -i '/\/\/ @match/d' "$USERSCRIPT_FILE"
 # Đọc toàn bộ nội dung của file Userscript
 script_content=$(<"$USERSCRIPT_FILE")
 
-# Chèn các dòng @match vào ngay sau phần // ==UserScript==
+# Tìm vị trí ngay sau dòng // ==UserScript==
 insert_position=$(grep -n "^// ==UserScript==" "$USERSCRIPT_FILE" | cut -d: -f1)
+insert_position=$((insert_position + 1))  # Thêm 1 để chèn sau dòng này
 
 # Tạo phần nội dung chứa các dòng @match từ black.txt
 match_lines=""
@@ -27,8 +28,8 @@ do
     fi
 done < "$BLACKLIST_FILE"
 
-# Thêm các dòng @match vào vị trí ngay sau // ==UserScript==
-sed -i "${insert_position}a\\
+# Chèn các dòng @match vào ngay sau // ==UserScript==
+sed -i "${insert_position}i\\
 $match_lines" "$USERSCRIPT_FILE"
 
 # Thông báo hoàn tất
