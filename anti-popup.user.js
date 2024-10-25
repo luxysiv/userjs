@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Auto Block Suspicious URLs on Page Load
+// @name         Smart Block Irregular URLs and Remove Leave Confirmations
 // @namespace    luxysiv
-// @version      5.0
-// @description  Automatically block suspicious URLs on page load and save them for future blocks.
+// @version      4.4
+// @description  Block irregular URLs and remove leave confirmations.
 // @author       Mạnh Dương
 // @match        *://*/*
 // @grant        none
@@ -13,112 +13,104 @@
 (function() {
     'use strict';
 
-    // Lấy danh sách các trang đã được block từ localStorage hoặc khởi tạo danh sách mới
-    let blockedUrls = JSON.parse(localStorage.getItem('blockedUrls')) || [];
+    // Danh sách các mẫu URL quảng cáo sử dụng regex
+    const suspiciousPatterns = [
+        // Chặn tên miền không rõ nguồn gốc
+        /^(https?:\/\/)?(www\.)?[a-z0-9-]{1,63}\.(com|net|org|xyz|info|top|club|site|biz|tk|pw|gq|ml)(\/[^\s]*)?$/, // Tên miền phổ biến
+        // Chặn các tham số quảng cáo
+        /.*[?&](aff_sub|utm_source|utm_medium|utm_campaign|utm_term|utm_content|z|var|id|ads)=.+/, // Tham số quảng cáo
+        // Chặn các chuỗi ký tự không rõ nguồn gốc
+        /[0-9a-z]{20,}/, // Chuỗi ký tự dài không rõ nguồn gốc
+        // Chặn các từ khóa trong URL
+        /.*(ads|redirect|click|survey|sweep|offer|promo|sale|win|contest|popunder|track).*/, // Các từ khóa liên quan đến quảng cáo
+        // Chặn about:blank
+        /^about:blank$/ // Chặn kết nối about:blank
+    ];
 
-    // Lưu danh sách vào localStorage
-    function saveBlockedUrls() {
-        localStorage.setItem('blockedUrls', JSON.stringify(blockedUrls));
-    }
-
-    // Kiểm tra xem URL có nằm trong danh sách bị block không
-    function isBlockedUrl(url) {
-        return blockedUrls.some(blockedUrl => url.includes(blockedUrl));
-    }
-
-    // Thêm URL vào danh sách block
-    function addToBlockedUrls(url) {
-        if (!blockedUrls.includes(url)) {
-            blockedUrls.push(url);
-            console.log(`Added to blocked URLs: ${url}`);
-            saveBlockedUrls();
-        }
-    }
-
-    // Hàm để phát hiện URL lạ (có thể là quảng cáo hoặc redirect)
+    // Hàm kiểm tra xem URL có phải là kỳ lạ không
     function isSuspiciousUrl(url) {
-        return !url.includes(window.location.hostname); // URL lạ nếu không thuộc cùng domain với trang hiện tại
+        return suspiciousPatterns.some(pattern => pattern.test(url));
     }
 
-    // Ghi đè window.open để phát hiện các URL lạ
+    // Ghi đè window.open để chặn các URL kỳ lạ
     const originalWindowOpen = window.open;
     window.open = function(url, target) {
-        if (isBlockedUrl(url)) {
-            console.log(`Blocked window.open for URL: ${url}`);
-            return null;
-        }
         if (isSuspiciousUrl(url)) {
-            addToBlockedUrls(url); // Thêm URL lạ vào danh sách chặn
-            return null; // Ngăn mở tab mới
+            console.log(`Blocked window.open for suspicious URL: ${url}`);
+            return null; // Ngăn không cho mở tab mới
         }
         return originalWindowOpen(url, target);
     };
 
-    // Ghi đè location.assign và location.replace để phát hiện URL lạ
+    // Ghi đè addEventListener để chặn click trên các link mở tab mới
+    const originalAddEventListener = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function(type, listener, options) {
+        if (type === 'click') {
+            const wrappedListener = function(event) {
+                const target = event.target.closest('a[target="_blank"]');
+                if (target && isSuspiciousUrl(target.href)) {
+                    console.log(`Blocked link click: ${target.href}`);
+                    event.preventDefault();
+                } else {
+                    listener.call(this, event);
+                }
+            };
+            return originalAddEventListener.call(this, type, wrappedListener, options);
+        }
+        return originalAddEventListener.call(this, type, listener, options);
+    };
+
+    // Chặn yêu cầu mạng với XMLHttpRequest
+    const originalXhrOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url) {
+        if (isSuspiciousUrl(url)) {
+            console.log(`Blocked XMLHttpRequest to: ${url}`);
+            return; // Ngăn không cho thực hiện yêu cầu
+        }
+        return originalXhrOpen.apply(this, arguments);
+    };
+
+    // Chặn các yêu cầu mạng với fetch
+    const originalFetch = window.fetch;
+    window.fetch = function(input, init) {
+        const url = typeof input === 'string' ? input : input.url;
+        if (isSuspiciousUrl(url)) {
+            console.log(`Blocked fetch request to: ${url}`);
+            return Promise.reject(new Error('Blocked suspicious URL'));
+        }
+        return originalFetch.apply(this, arguments);
+    };
+
+    // Chặn mọi thay đổi location.href hoặc location.assign
     const originalLocationAssign = Location.prototype.assign;
     Location.prototype.assign = function(url) {
-        if (isBlockedUrl(url)) {
-            console.log(`Blocked location.assign to: ${url}`);
-            return;
-        }
         if (isSuspiciousUrl(url)) {
-            addToBlockedUrls(url); // Thêm URL lạ vào danh sách chặn
-            return;
+            console.log(`Blocked location.assign to: ${url}`);
+            return; // Ngăn không cho chuyển hướng
         }
         return originalLocationAssign.call(this, url);
     };
 
+    // Chặn mọi thay đổi location.replace
     const originalLocationReplace = Location.prototype.replace;
     Location.prototype.replace = function(url) {
-        if (isBlockedUrl(url)) {
-            console.log(`Blocked location.replace to: ${url}`);
-            return;
-        }
         if (isSuspiciousUrl(url)) {
-            addToBlockedUrls(url); // Thêm URL lạ vào danh sách chặn
-            return;
+            console.log(`Blocked location.replace to: ${url}`);
+            return; // Ngăn không cho chuyển hướng
         }
         return originalLocationReplace.call(this, url);
     };
 
-    // Ghi đè thay đổi location.href để phát hiện URL lạ
+    // Chặn mọi thay đổi location.href
     Object.defineProperty(Location.prototype, 'href', {
         set: function(url) {
-            if (isBlockedUrl(url)) {
-                console.log(`Blocked setting location.href to: ${url}`);
-                return;
-            }
             if (isSuspiciousUrl(url)) {
-                addToBlockedUrls(url); // Thêm URL lạ vào danh sách chặn
-                return;
+                console.log(`Blocked setting location.href to: ${url}`);
+                return; // Ngăn không cho thay đổi href
             }
             return Object.getOwnPropertyDescriptor(Location.prototype, 'href').set.call(this, url);
         }
     });
-
-    // Chặn các hành động nếu URL đã nằm trong danh sách chặn
-    if (blockedUrls.length > 0) {
-        // Chặn XMLHttpRequest tới các URL bị chặn
-        const originalXhrOpen = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function(method, url) {
-            if (isBlockedUrl(url)) {
-                console.log(`Blocked XMLHttpRequest to: ${url}`);
-                return;
-            }
-            return originalXhrOpen.apply(this, arguments);
-        };
-
-        // Chặn các yêu cầu fetch tới các URL bị chặn
-        const originalFetch = window.fetch;
-        window.fetch = function(input, init) {
-            const url = typeof input === 'string' ? input : input.url;
-            if (isBlockedUrl(url)) {
-                console.log(`Blocked fetch request to: ${url}`);
-                return Promise.reject(new Error('Blocked suspicious URL'));
-            }
-            return originalFetch.apply(this, arguments);
-        };
-    }
 
     // Gỡ bỏ hoàn toàn hộp thoại xác nhận rời khỏi trang
     window.onbeforeunload = null;
